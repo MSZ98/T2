@@ -6,6 +6,14 @@
 #include "stepper.h"
 
 
+// SZYBKOŚĆ SILNIKÓW
+uint16_t speed = 0.6 * 3398;
+
+// CZAS OD STARTU CHOWANIA GNIAZDA DO SPRAWDZENIA, CZY SENSORY WYKRYWAJĄ WTYCZKĘ UWAGA, CO 200ms, czyli 200, 400 ... 4000, 4200, 4400
+#define czasSprawdzeniaWtyczki_ms 4600
+// NIE POTRZEBA ŚREDNIKA
+
+
 // button wciśnięty = 1
 
 
@@ -35,7 +43,7 @@ stepper m1, m2;
 void initControls();
 
 
-uint16_t speed = 0.1* 3398;
+
 
 
 void updateSpeed() {
@@ -46,13 +54,14 @@ void updateSpeed() {
 
 
 
+
 //Jeżeli wywołana została funkcja release, to trzeba wywołać hold, bo inaczej nie pojedzie
 
 
 
 
-#define chowajGniazdo() stepper_hold(m1);stepper_run(m1, -turn * 5000, speed)
-#define pokazGniazdo() stepper_hold(m1);stepper_run(m1, turn * 5000, speed)
+#define chowajGniazdo() stepper_hold(m1);stepper_run(m1, -1e6, speed)
+#define pokazGniazdo() stepper_hold(m1);stepper_run(m1, 1e6, speed)
 
 #define zatrzymajGniazdo() stepper_run(m1, 0, 0);stepper_release(m1)
 
@@ -69,13 +78,23 @@ void updateSpeed() {
 
 
 
-
 //Gniazdo wysunięte k1 daje sygnał
 //Gniazdo zasunięte k2 daje sygnał
 //Gniazdo w podróży żadna nie daje sygnału
 
 
 
+volatile float timeFromHidingStart_ms = 0;
+
+void checkSensors() {
+	timeFromHidingStart_ms += 10;
+	if(timeFromHidingStart_ms == 3000)
+		if(wtyczka_wlozona) {
+			pokazGniazdo();
+			while(!gniazdo_wysuniete) delay_ms(200);             //poczekaj aż gniazdo się wysunie
+			zatrzymajGniazdo();
+		}
+}
 
 
 
@@ -98,10 +117,19 @@ int main() {
 
 		// CHOWANIE GNIZDA
 		//if(io_isHigh(button) && gniazdo_wysuniete && wtyczka_wlozona) continue; //Jeżeli przycisk jest wciśnięty (zbocze) i gniazdko wysunięte i jeżeli wtyczka nie jest włożona
-		if(io_isHigh(button) && gniazdo_wysuniete && !wtyczka_wlozona) { //Jeżeli przycisk jest wciśnięty (zbocze) i gniazdko wysunięte i jeżeli wtyczka nie jest włożona
+		if(io_isHigh(button) && gniazdo_wysuniete) { //Jeżeli przycisk jest wciśnięty (zbocze) i gniazdko wysunięte i jeżeli wtyczka nie jest włożona
 			if(bt == lim) {
+				timeFromHidingStart_ms = 0;
 				chowajGniazdo();
-				while(!gniazdo_zasuniete) delay_ms(100);             //poczekaj aż gniazdo się schowa
+				while(!gniazdo_zasuniete) {
+					delay_ms(200);             //poczekaj aż gniazdo się schowa
+					timeFromHidingStart_ms += 200;
+					if(timeFromHidingStart_ms == czasSprawdzeniaWtyczki_ms && wtyczka_wlozona) {
+						pokazGniazdo();
+						while(!gniazdo_wysuniete) delay_ms(200);             //poczekaj aż gniazdo się wysunie
+						break;
+					}
+				}
 				zatrzymajGniazdo();
 			}
 			bt = 0;
@@ -111,7 +139,7 @@ int main() {
 		else if(io_isHigh(button)) { //Jeżeli przycisk jest wciśnięty (zbocze) i gniazdko zasunięte
 			if(bt == lim) {
 				pokazGniazdo();
-				while(!gniazdo_wysuniete) delay_ms(100);             //poczekaj aż gniazdo się wysunie
+				while(!gniazdo_wysuniete) delay_ms(200);             //poczekaj aż gniazdo się wysunie
 				zatrzymajGniazdo();
 			}
 			bt = 0;
@@ -168,7 +196,7 @@ void initControls() {
 	m1 = stepper_createMotor(m1_s, m1_d, m1_e);
 
 
-	//TIM_repeat(TIM3, 48000, 50, updateSpeed);
+	//TIM_repeat(TIM3, 48000, 10, checkSensors);
 
 
 }
