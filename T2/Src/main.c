@@ -183,7 +183,7 @@ void initControls() {
 	m1 = stepper_createMotor(m1_s, m1_d, m1_e);
 
 
-	TIM_repeat(TIM3, 48000, 10, updateSpeed());
+	TIM_repeat(TIM3, 48000, 10, updateSpeed);
 
 
 }
