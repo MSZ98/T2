@@ -6,12 +6,20 @@
 #include "stepper.h"
 
 
-// SZYBKOŚĆ SILNIKÓW
+
+
+// EKSPERYMENTALNIE WYZNACZONO, ŻE PODCZAS CHOWANIA GNIAZDKA SILNIK POWINIEN SPRAWDZIĆ OBECNOŚĆ WTYCZKI PO WYKONANIU 9378 KROKÓW
+#define iloscKrokowDoSprawdzeniaWtyczki 9378
+
+
+// SZYBKOŚĆ SILNIKÓW (w krokach na sekundę)
 uint16_t speed = 0.6 * 3398;
 
+
 // CZAS OD STARTU CHOWANIA GNIAZDA DO SPRAWDZENIA, CZY SENSORY WYKRYWAJĄ WTYCZKĘ UWAGA, CO 200ms, czyli 200, 400 ... 4000, 4200, 4400
-#define czasSprawdzeniaWtyczki_ms 4600
+uint16_t czasSprawdzeniaWtyczki_ms = 4600;
 // NIE POTRZEBA ŚREDNIKA
+
 
 
 // button wciśnięty = 1
@@ -22,42 +30,33 @@ stepper m1, m2;
 #define potSpeed PA7
 #define potTime PA6
 
-//LIMIT SWITCHES
+// KRAŃCÓWKI (limit switches)
 #define ls1 PB5
 #define ls2 PB4
 
-//CONTACT SENSOR zakryty = 1, dioda nie świeci = 1, dioda świeci = 0
+// CZUJNIK NA ODLEGŁOŚĆ ODLEGŁOŚCI (contact sensor) zakryty = 1, dioda nie świeci = 1, dioda świeci = 0
 #define cs1 PA2
 #define cs2 PA1
 
-//STEPPER 1 dir, step, enable
+// STEPPER 1 dir, step, enable
 #define m1_d PA5
 #define m1_s PA4
 #define m1_e PA3
 
 
-
-#define turn 2 * 16 * 96
-
-
 void initControls();
 
 
-
-
-
+// wykonywane w równych odstępach czasu przez timer (osobny wątek na przerwaniach)
 void updateSpeed() {
 	ADC_setPin(potSpeed);
-	speed = ADC_sample() / 4095.0 * turn * 10;
+	speed = ADC_sample() / 4095.0 * 3398;
 	stepper_setSpeed(m1, speed);
+	czasSprawdzeniaWtyczki_ms = iloscKrokowDoSprawdzeniaWtyczki / speed * 1000;
 }
 
 
-
-
 //Jeżeli wywołana została funkcja release, to trzeba wywołać hold, bo inaczej nie pojedzie
-
-
 
 
 #define chowajGniazdo() stepper_hold(m1);stepper_run(m1, -1e6, speed)
@@ -66,8 +65,8 @@ void updateSpeed() {
 #define zatrzymajGniazdo() stepper_run(m1, 0, 0);stepper_release(m1)
 
 
-//K1 krańcówka stykająca, kiedy wysunięte jest gniazdko
-//K2 styka kiedy gniazdko jest zasunięte
+//ls1 krańcówka stykająca, kiedy wysunięte jest gniazdko
+//ls2 styka kiedy gniazdko jest zasunięte
 #define gniazdo_wysuniete io_isLow(ls1)  //Jeżeli to będzie 1, to gniazdko wysunięte
 #define gniazdo_zasuniete io_isLow(ls2)  //Jeżeli to będzie 1, to gniazdko zasunięte
 
@@ -86,17 +85,6 @@ void updateSpeed() {
 
 volatile float timeFromHidingStart_ms = 0;
 
-void checkSensors() {
-	timeFromHidingStart_ms += 10;
-	if(timeFromHidingStart_ms == 3000)
-		if(wtyczka_wlozona) {
-			pokazGniazdo();
-			while(!gniazdo_wysuniete) delay_ms(200);             //poczekaj aż gniazdo się wysunie
-			zatrzymajGniazdo();
-		}
-}
-
-
 
 int main() {
 	CLOCK_internal48mhz();
@@ -108,25 +96,24 @@ int main() {
 
 	//stepper_hold(m1);stepper_run(m1, turn * 5000, speed);
 
-
-
-
+	uint8_t sprawdzonoWtyczki = 0;
 	uint16_t lim = 30;
 	uint16_t bt = lim;
 	while(1) {
 
 		// CHOWANIE GNIZDA
-		//if(io_isHigh(button) && gniazdo_wysuniete && wtyczka_wlozona) continue; //Jeżeli przycisk jest wciśnięty (zbocze) i gniazdko wysunięte i jeżeli wtyczka nie jest włożona
 		if(io_isHigh(button) && gniazdo_wysuniete) { //Jeżeli przycisk jest wciśnięty (zbocze) i gniazdko wysunięte i jeżeli wtyczka nie jest włożona
 			if(bt == lim) {
 				timeFromHidingStart_ms = 0;
+				sprawdzonoWtyczki = 0;
 				chowajGniazdo();
-				while(!gniazdo_zasuniete) {
-					delay_ms(200);             //poczekaj aż gniazdo się schowa
+				while(!gniazdo_zasuniete) {	//poczekaj aż gniazdo się schowa
+					delay_ms(200);
 					timeFromHidingStart_ms += 200;
-					if(timeFromHidingStart_ms == czasSprawdzeniaWtyczki_ms && wtyczka_wlozona) {
+					if(timeFromHidingStart_ms >= czasSprawdzeniaWtyczki_ms && wtyczka_wlozona && !sprawdzonoWtyczki) {
 						pokazGniazdo();
 						while(!gniazdo_wysuniete) delay_ms(200);             //poczekaj aż gniazdo się wysunie
+						sprawdzonoWtyczki = 1;
 						break;
 					}
 				}
@@ -196,7 +183,7 @@ void initControls() {
 	m1 = stepper_createMotor(m1_s, m1_d, m1_e);
 
 
-	//TIM_repeat(TIM3, 48000, 10, checkSensors);
+	TIM_repeat(TIM3, 48000, 10, updateSpeed());
 
 
 }
