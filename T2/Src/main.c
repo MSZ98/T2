@@ -108,13 +108,17 @@ int main() {
 				sprawdzonoWtyczki = 0;
 				chowajGniazdo();
 				while(!gniazdo_zasuniete) {	//poczekaj aż gniazdo się schowa
-					delay_ms(200);
-					timeFromHidingStart_ms += 200;
-					if(timeFromHidingStart_ms >= czasSprawdzeniaWtyczki_ms && wtyczka_wlozona && !sprawdzonoWtyczki) {
-						pokazGniazdo();
-						while(!gniazdo_wysuniete) delay_ms(200);             //poczekaj aż gniazdo się wysunie
-						sprawdzonoWtyczki = 1;
-						break;
+					for(int i = 0;i < 200;i++) {	// poczekaj 200ms, ale co milisekundę sprawdzając, czy już czas, aby sprawdzić obecność wtyczki
+						if(timeFromHidingStart_ms >= czasSprawdzeniaWtyczki_ms) {
+							if(!sprawdzonoWtyczki && wtyczka_wlozona) {
+								pokazGniazdo();
+								while(!gniazdo_wysuniete) delay_ms(200);             //poczekaj aż gniazdo się wysunie
+								break;
+							}
+							sprawdzonoWtyczki = 1;
+						}
+						delay_ms(1);
+						timeFromHidingStart_ms += 1;
 					}
 				}
 				zatrzymajGniazdo();
