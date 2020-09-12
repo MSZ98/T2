@@ -10,6 +10,7 @@
 
 // EKSPERYMENTALNIE WYZNACZONO, ŻE PODCZAS CHOWANIA GNIAZDKA SILNIK POWINIEN SPRAWDZIĆ OBECNOŚĆ WTYCZKI PO WYKONANIU 9378 KROKÓW
 #define iloscKrokowDoSprawdzeniaWtyczki 9378
+#define iloscKrokowDoSprawdzenia2 10000
 
 
 // SZYBKOŚĆ SILNIKÓW (w krokach na sekundę)
@@ -19,6 +20,9 @@ uint16_t speed = 0.6 * 3398;
 // CZAS OD STARTU CHOWANIA GNIAZDA DO SPRAWDZENIA, CZY SENSORY WYKRYWAJĄ WTYCZKĘ UWAGA, CO 200ms, czyli 200, 400 ... 4000, 4200, 4400
 uint16_t czasSprawdzeniaWtyczki_ms = 4600;
 // NIE POTRZEBA ŚREDNIKA
+
+// to jest ac
+uint16_t czasSprawdzenia2_ms = 4600;
 
 
 
@@ -53,6 +57,7 @@ void updateSpeed() {
 	speed = ADC_sample() / 4095.0 * 3398;
 	stepper_setSpeed(m1, speed);
 	czasSprawdzeniaWtyczki_ms = iloscKrokowDoSprawdzeniaWtyczki / speed * 1000;
+	czasSprawdzenia2_ms = iloscKrokowDoSprawdzenia2 / speed * 1000;
 }
 
 
@@ -97,6 +102,7 @@ int main() {
 	//stepper_hold(m1);stepper_run(m1, turn * 5000, speed);
 
 	uint8_t sprawdzonoWtyczki = 0;
+	uint8_t sprawdzono2 = 0;
 	uint16_t lim = 30;
 	uint16_t bt = lim;
 	while(1) {
@@ -107,19 +113,31 @@ int main() {
 				timeFromHidingStart_ms = 0;
 				sprawdzonoWtyczki = 0;
 				chowajGniazdo();
+				uint8_t przerwij = 0;
 				while(!gniazdo_zasuniete) {	//poczekaj aż gniazdo się schowa
 					for(int i = 0;i < 200;i++) {	// poczekaj 200ms, ale co milisekundę sprawdzając, czy już czas, aby sprawdzić obecność wtyczki
 						if(timeFromHidingStart_ms >= czasSprawdzeniaWtyczki_ms) {
 							if(!sprawdzonoWtyczki && wtyczka_wlozona) {
 								pokazGniazdo();
 								while(!gniazdo_wysuniete) delay_ms(200);             //poczekaj aż gniazdo się wysunie
+								przerwij = 1;
 								break;
 							}
 							sprawdzonoWtyczki = 1;
 						}
+						if(timeFromHidingStart_ms >= czasSprawdzenia2_ms) {
+							if(!sprawdzono2 && wtyczka_wlozona) {
+								pokazGniazdo();
+								while(!gniazdo_wysuniete) delay_ms(200);             //poczekaj aż gniazdo się wysunie
+								przerwij = 1;
+								break;
+							}
+							sprawdzono2 = 1;
+						}
 						delay_ms(1);
 						timeFromHidingStart_ms += 1;
 					}
+					if(przerwij) break;
 				}
 				zatrzymajGniazdo();
 			}
